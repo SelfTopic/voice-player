@@ -1,3 +1,5 @@
+import logging
+
 from voice_player.commands import load_mapping, read_lines
 
 
@@ -23,11 +25,12 @@ def test_load_mapping_lowercases_word(tmp_path):
     assert load_mapping(path, {}) == {"терминал": "konsole"}
 
 
-def test_load_mapping_skips_malformed_line(tmp_path, capsys):
+def test_load_mapping_skips_malformed_line(tmp_path, caplog):
     path = tmp_path / "windows.txt"
     path.write_text("это не тот формат\nбраузер = chrome\n", encoding="utf-8")
-    assert load_mapping(path, {}) == {"браузер": "chrome"}
-    assert "не понял строку" in capsys.readouterr().err
+    with caplog.at_level(logging.WARNING, logger="voice_player.commands"):
+        assert load_mapping(path, {}) == {"браузер": "chrome"}
+    assert "не понял строку" in caplog.text
 
 
 def test_load_mapping_missing_file_uses_fallback(tmp_path):

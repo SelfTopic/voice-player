@@ -1,5 +1,6 @@
 """Голосовой ввод текста: вставка через буфер обмена и отправка Enter в то же окно."""
 
+import logging
 import re
 import threading
 import time
@@ -9,6 +10,8 @@ from .config import SEND_WINDOW_SEC, TERMINAL_PATTERN
 from .notify import notify
 from .uinput import KEY_ENTER, KEY_LEFTCTRL, KEY_LEFTSHIFT, KEY_V, UInputDevice
 from .windows import focus_window
+
+logger = logging.getLogger(__name__)
 
 
 class Dictation:
@@ -59,6 +62,6 @@ def send_enter(kdotool: str, keyboard: UInputDevice, dictation: Dictation, notif
         message = "отправлено"
     else:
         message = "«отправь» работает только сразу после «напиши» и в том же окне"
-    print(f"  {message}", flush=True)
+    logger.info(message)
     if notify_on:
         notify(message)

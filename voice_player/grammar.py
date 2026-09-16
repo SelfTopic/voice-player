@@ -1,10 +1,12 @@
 """Разбор того, что расслышал Vosk: быстрые команды и запросы к Whisper."""
 
+import logging
 import re
-import sys
 
 from .commands import COMMANDS
 from .config import ASK_VERBS, ASK_WORD, DICTATE_WORDS, SEARCH_WORDS
+
+logger = logging.getLogger(__name__)
 
 # режим запросов: «джарвис включи ...»
 ASK = "__ask__"
@@ -31,7 +33,7 @@ def known_words(model, phrases: list[str]) -> list[str]:
     for phrase in phrases:
         missing = [w for w in phrase.split() if model.vosk_model_find_word(w) == -1]
         if missing:
-            print(f"! модель не знает слов {missing}, фраза «{phrase}» пропущена", file=sys.stderr)
+            logger.warning("модель не знает слов %s, фраза «%s» пропущена", missing, phrase)
         else:
             ok.append(phrase)
     return ok

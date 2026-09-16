@@ -1,6 +1,7 @@
 """Основной цикл: чтение микрофона, быстрые команды и передача записи в Asker."""
 
 import json
+import logging
 import threading
 import time
 from collections import deque
@@ -24,6 +25,8 @@ from .players import Players
 from .uinput import UInputDevice
 from .windows import toggle_fullscreen
 
+logger = logging.getLogger(__name__)
+
 
 class VoiceLoop:
     """Состояние распознавания живёт в атрибутах экземпляра, а не в nonlocal-переменных
@@ -33,7 +36,7 @@ class VoiceLoop:
         self, *, mic, rec, free, players: Players, dictation: Dictation, asker: Asker | None,
         kdotool: str | None, keyboard: UInputDevice | None, mouse: UInputDevice | None,
         window_patterns: dict[str, str], wake: str | None, stable: int, min_conf: float,
-        notify_on: bool, verbose: bool,
+        notify_on: bool,
     ):
         self.mic = mic
         self.rec = rec
@@ -49,7 +52,6 @@ class VoiceLoop:
         self.stable = stable
         self.min_conf = min_conf
         self.notify_on = notify_on
-        self.verbose = verbose
 
         self.chunk_bytes = SAMPLE_RATE * 2 * CHUNK_MS // 1000
         self.preroll: deque[bytes] = deque(maxlen=int(PREROLL_SEC * 1000 / CHUNK_MS))
@@ -126,8 +128,7 @@ class VoiceLoop:
         if not text:
             return
         conf = min((w.get("conf", 0.0) for w in res.get("result", [])), default=0.0)
-        if self.verbose:
-            print(f"  слышу: «{text}» (conf {conf:.2f})", flush=True)
+        logger.debug("слышу: «%s» (conf %.2f)", text, conf)
         mode = ask_mode(text) if self.asker else None
         if mode:
             self._start_ask(mode)
@@ -154,7 +155,7 @@ class VoiceLoop:
             return  # вставлять текст нечем; обычно сюда и не попасть — слова нет в грамматике
         self.ask_kind = mode
         self.paused_for_ask = self.players.pause_playing()  # чтобы видео не мешало расслышать запрос
-        print("🎙 слушаю запрос…", flush=True)
+        logger.info("🎙 слушаю запрос…")
         if self.notify_on:
             notify("🎙 слушаю…")
         self.recording, self.rec_chunks = list(self.preroll), 0
@@ -162,7 +163,8 @@ class VoiceLoop:
         self.candidate, self.streak = None, 0
 
     def _fire(self, cmd: str, now: float, how: str) -> None:
-        print(f"→ {cmd}" + (f" ({how})" if self.verbose else ""), flush=True)
+        logger.info("→ %s", cmd)
+        logger.debug("сработало по: %s", how)
         argv = COMMANDS[cmd]
         if argv[0] == PLAYER:
             # в потоке: опрос плееров занимает десятки миллисекунд, микрофон ждать не должен
@@ -178,7 +180,7 @@ class VoiceLoop:
         elif argv[0] == FULLSCREEN:
             threading.Thread(
                 target=toggle_fullscreen,
-                args=(self.kdotool, self.keyboard, self.players, self.notify_on, self.verbose),
+                args=(self.kdotool, self.keyboard, self.players, self.notify_on),
                 daemon=True,
             ).start()
         else:

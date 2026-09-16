@@ -1,9 +1,11 @@
 """Реестр быстрых команд: слово -> что с ним делать."""
 
-import sys
+import logging
 from pathlib import Path
 
 from .config import SCROLL_NOTCHES
+
+logger = logging.getLogger(__name__)
 
 # Команды плеера: кому их отдать, решает Players. Без явного -p playerctl отдаёт команду,
 # которую текущий плеер не умеет (например «дальше» у одиночного видео YouTube), следующему — Telegram.
@@ -60,5 +62,5 @@ def load_mapping(path: Path, fallback: dict[str, str]) -> dict[str, str]:
         if sep and word.strip() and pattern.strip():
             mapping[word.strip().lower()] = pattern.strip()
         else:
-            print(f"! {path.name}: не понял строку «{line}»", file=sys.stderr)
+            logger.warning("%s: не понял строку «%s»", path.name, line)
     return mapping

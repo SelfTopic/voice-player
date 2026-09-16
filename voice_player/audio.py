@@ -1,5 +1,6 @@
 """Аудиовыход (pactl sinks) и захват микрофона."""
 
+import logging
 import re
 import shutil
 import subprocess
@@ -7,6 +8,8 @@ import sys
 
 from .config import CHUNK_MS, SAMPLE_RATE
 from .notify import notify
+
+logger = logging.getLogger(__name__)
 
 
 def switch_sink(pattern: str, label: str, notify_on: bool) -> None:
@@ -30,7 +33,7 @@ def switch_sink(pattern: str, label: str, notify_on: bool) -> None:
             message = f"звук: {label}"
     except (OSError, subprocess.SubprocessError, re.error) as e:
         message = f"не удалось переключить звук: {e}"
-    print(f"  {message}", flush=True)
+    logger.info(message)
     if notify_on:
         notify(message)
 

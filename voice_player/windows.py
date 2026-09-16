@@ -1,6 +1,7 @@
 """Управление окнами KDE через kdotool/kwin-скрипты: фокус, переключение, полный экран."""
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -10,6 +11,8 @@ from .config import DATA_DIR, TELEGRAM_MAIN_CAPTION
 from .notify import notify
 from .players import Players
 from .uinput import KEY_ENTER, KEY_ESC, KEY_F, KEY_LEFTCTRL, UInputDevice
+
+logger = logging.getLogger(__name__)
 
 # Полный экран: у Chrome и Telegram в MPRIS такого нет, поэтому нажимаем клавиши.
 # YouTube: F — развернуть, Esc — выйти. Просмотрщик видео Telegram: Ctrl+Enter — переключить.
@@ -112,7 +115,7 @@ def app_of(name: str) -> str | None:
     return None
 
 
-def toggle_fullscreen(kdotool: str, keyboard: UInputDevice, players: Players, notify_on: bool, verbose: bool) -> None:
+def toggle_fullscreen(kdotool: str, keyboard: UInputDevice, players: Players, notify_on: bool) -> None:
     # окно того, что играет (или названо последним); если не знаем — активное окно
     sent, _ = players.targets("next")
     app = app_of(sent[0]) if sent else None
@@ -120,12 +123,11 @@ def toggle_fullscreen(kdotool: str, keyboard: UInputDevice, players: Players, no
     exclude = TELEGRAM_MAIN_CAPTION if app == "telegram" else ""
     window_class, fullscreen, caption = focus_window(kdotool, pattern, exclude)
     app = app or app_of(window_class)
-    if verbose:
-        state = {"1": "полноэкранное", "0": "обычное"}.get(fullscreen, "?")
-        print(f"  полный экран: окно «{caption or window_class or '?'}», сейчас {state}", flush=True)
+    state = {"1": "полноэкранное", "0": "обычное"}.get(fullscreen, "?")
+    logger.debug("полный экран: окно «%s», сейчас %s", caption or window_class or "?", state)
 
     def refuse(message: str) -> None:
-        print(f"  ! {message}", flush=True)
+        logger.warning(message)
         if notify_on:
             notify(message)
 

@@ -1,5 +1,6 @@
 """Медленный режим: «джарвис, включи ...» и «загугли ...», распознаётся Whisper."""
 
+import logging
 import time
 import urllib.parse
 
@@ -11,6 +12,8 @@ from .notify import notify, run_quiet
 from .players import Players, playerctl
 from .uinput import KEY_ENTER, KEY_ESC, KEY_L, KEY_LEFTCTRL, KEY_V, UInputDevice
 from .windows import focus_window
+
+logger = logging.getLogger(__name__)
 
 
 def replace_youtube_tab(kdotool: str | None, keyboard: "UInputDevice | None", url: str) -> bool:
@@ -42,7 +45,7 @@ def replace_youtube_tab(kdotool: str | None, keyboard: "UInputDevice | None", ur
 class Asker:
     def __init__(
         self, whisper_model: str, names: list[str], players: Players,
-        kdotool: str | None, keyboard: "UInputDevice | None", dictation: Dictation, notify_on: bool, verbose: bool,
+        kdotool: str | None, keyboard: "UInputDevice | None", dictation: Dictation, notify_on: bool,
     ):
         import numpy as np
         import yt_dlp
@@ -54,12 +57,12 @@ class Asker:
         self.players = players
         self.kdotool, self.keyboard = kdotool, keyboard
         self.dictation = dictation
-        self.notify_on, self.verbose = notify_on, verbose
+        self.notify_on = notify_on
         self.prompt = build_prompt(names)
         self.whisper = WhisperModel(whisper_model, device="cpu", compute_type="int8")
 
     def say(self, text: str) -> None:
-        print(f"  {text}", flush=True)
+        logger.info(text)
         if self.notify_on:
             notify(text)
 
@@ -82,8 +85,7 @@ class Asker:
         try:
             t = time.monotonic()
             text = self.transcribe(audio, mode)
-            if self.verbose:
-                print(f"  whisper: «{text}» ({time.monotonic() - t:.1f} с)", flush=True)
+            logger.debug("whisper: «%s» (%.1f с)", text, time.monotonic() - t)
             query = extract_query(text, mode)
             if not query:
                 self.say("не расслышал")
@@ -107,8 +109,7 @@ class Asker:
             if not video:
                 self.say(f"ничего не нашёл: {query}")
                 return
-            if self.verbose:
-                print(f"  поиск: {time.monotonic() - t:.1f} с", flush=True)
+            logger.debug("поиск: %.1f с", time.monotonic() - t)
             url = f"https://www.youtube.com/watch?v={video['id']}"
             if replace_youtube_tab(self.kdotool, self.keyboard, url):
                 where = "в той же вкладке"
@@ -118,9 +119,9 @@ class Asker:
             playback_replaced = True
             self.players.name(BROWSER_PATTERN)
             self.say(f"▶ {video.get('title') or query}")
-            if self.verbose:
-                print(f"  открыто {where}", flush=True)
+            logger.debug("открыто %s", where)
         except Exception as e:
+            logger.debug("необработанная ошибка в Asker.handle", exc_info=True)
             self.say(f"ошибка: {e}")
         finally:
             if not playback_replaced:

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,7 @@ from .config import (
 )
 from .dictation import Dictation
 from .grammar import build_grammar, known_words
+from .logging_setup import configure as configure_logging
 from .loop import VoiceLoop
 from .players import Players
 from .uinput import (
@@ -44,6 +46,8 @@ from .uinput import (
     UInputDevice,
 )
 from .windows import WINDOWS_FALLBACK, find_kdotool, window_command
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,11 +91,11 @@ def register_window_commands(args: argparse.Namespace, kdotool: str | None) -> d
     if args.no_windows:
         return window_patterns
     if not kdotool:
-        print("! переключение окон выключено: нет kdotool (запусти install.sh)", file=sys.stderr)
+        logger.warning("переключение окон выключено: нет kdotool (запусти install.sh)")
         return window_patterns
     for word, pattern in load_mapping(args.windows, WINDOWS_FALLBACK).items():
         if word in COMMANDS:
-            print(f"! «{word}» уже занято командой плеера, окно пропущено", file=sys.stderr)
+            logger.warning("«%s» уже занято командой плеера, окно пропущено", word)
             continue
         COMMANDS[word] = window_command(kdotool, pattern)
         window_patterns[word] = pattern
@@ -112,7 +116,7 @@ def make_input_devices(kdotool: str | None) -> tuple[UInputDevice | None, UInput
                 "voice-player keyboard", keys=(KEY_ESC, KEY_ENTER, KEY_LEFTCTRL, KEY_LEFTSHIFT, KEY_F, KEY_L, KEY_V),
             )
     except OSError as e:
-        print(f"! полный экран и прокрутка выключены: нет доступа к /dev/uinput ({e.strerror})", file=sys.stderr)
+        logger.warning("полный экран и прокрутка выключены: нет доступа к /dev/uinput (%s)", e.strerror)
     disabled = ([] if keyboard else [FULLSCREEN, SEND]) + ([] if mouse else [SCROLL])
     for word in [w for w, argv in COMMANDS.items() if argv[0] in disabled]:
         del COMMANDS[word]
@@ -125,14 +129,14 @@ def make_asker(
 ) -> Asker | None:
     if args.no_ask:
         return None
-    print(f"загружаю Whisper «{args.whisper}» (в первый раз скачается)…", flush=True)
+    logger.info("загружаю Whisper «%s» (в первый раз скачается)…", args.whisper)
     names = read_lines(args.names)
     if names:
-        print(f"подсказки для Whisper: {', '.join(names)}", flush=True)
+        logger.info("подсказки для Whisper: %s", ", ".join(names))
     try:
-        return Asker(args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify, args.verbose)
+        return Asker(args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify)
     except ImportError as e:
-        print(f"! запросы выключены: {e} (запусти install.sh --ask)", file=sys.stderr)
+        logger.warning("запросы выключены: %s (запусти install.sh --ask)", e)
         return None
 
 
@@ -154,20 +158,21 @@ def print_startup_summary(
     wake: str | None, phrases: list[str], window_patterns: dict[str, str], asker: Asker | None, keyboard,
 ) -> None:
     hint = f"«{wake} <команда>»" if wake else "команды"
-    print(f"слушаю {hint}: {', '.join(p for p in phrases if p not in window_patterns)}", flush=True)
+    logger.info("слушаю %s: %s", hint, ", ".join(p for p in phrases if p not in window_patterns))
     active_windows = [p for p in phrases if p in window_patterns]
     if active_windows:
-        print(f"окна: {', '.join(active_windows)}", flush=True)
+        logger.info("окна: %s", ", ".join(active_windows))
     if asker:
         extra = ", «напиши <текст>» и «отправь»" if keyboard else ""
-        print(f"и запросы: «{ASK_WORD}, включи <песня или видео>», «загугли <запрос>»{extra}", flush=True)
+        logger.info("и запросы: «%s, включи <песня или видео>», «загугли <запрос>»%s", ASK_WORD, extra)
 
 
 def main() -> None:
     args = parse_args()
+    configure_logging(args.verbose)
     model, wake = load_model(args)
 
-    players = Players(args.verbose)
+    players = Players()
     dictation = Dictation()
     kdotool = find_kdotool()
 
@@ -187,7 +192,7 @@ def main() -> None:
     loop = VoiceLoop(
         mic=mic, rec=rec, free=free, players=players, dictation=dictation, asker=asker,
         kdotool=kdotool, keyboard=keyboard, mouse=mouse, window_patterns=window_patterns,
-        wake=wake, stable=args.stable, min_conf=args.min_conf, notify_on=not args.no_notify, verbose=args.verbose,
+        wake=wake, stable=args.stable, min_conf=args.min_conf, notify_on=not args.no_notify,
     )
     loop.run()
 

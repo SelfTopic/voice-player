@@ -1,11 +1,14 @@
 """Кому из медиаплееров отдавать голосовые команды."""
 
+import logging
 import re
 import subprocess
 import threading
 import time
 
 from .notify import notify
+
+logger = logging.getLogger(__name__)
 
 
 def playerctl(instance: str, *action: str) -> bool:
@@ -23,8 +26,7 @@ class Players:
     приложение, названное голосом («телеграм»), или то, что было поставлено на паузу.
     Остальное — тому, что играет сейчас."""
 
-    def __init__(self, verbose: bool):
-        self.verbose = verbose
+    def __init__(self):
         self.lock = threading.Lock()
         self.named: str | None = None  # регулярка приложения, названного последним
         self.named_at = 0.0
@@ -91,10 +93,9 @@ class Players:
             sent, to_pause = self.targets(action[0])
             for instance in to_pause:
                 playerctl(instance, "pause")
-            ok = all([playerctl(instance, *action) for instance in sent])
-        if self.verbose:
-            print(f"  плеер: {', '.join(sent) or '—'}", flush=True)
+            ok = all(playerctl(instance, *action) for instance in sent)
+        logger.debug("плеер: %s", ", ".join(sent) or "—")
         if not ok:
-            print(f"  ! плеер не умеет «{label}»", flush=True)
+            logger.warning("плеер не умеет «%s»", label)
         if notify_on:
             notify(label if ok else f"плеер не умеет «{label}»")
