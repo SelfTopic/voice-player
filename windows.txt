@@ -1,0 +1,13 @@
+# Голосовое слово = регулярное выражение по классу окна (регистр не важен).
+# Повтор того же слова переключает на следующее окно этого приложения.
+# Класс активного окна: kdotool getactivewindow getwindowclassname
+# Слово должно быть в словаре модели; незнакомые слова скрипт пропустит и напишет об этом.
+терминал = konsole|kitty|alacritty|wezterm|foot|ghostty|terminal
+консоль = konsole|kitty|alacritty|wezterm|foot|ghostty|terminal
+браузер = chrome|chromium
+хром = chrome|chromium
+ютуб = chrome|chromium
+редактор = ^code|codium
+код = ^code|codium
+телеграм = telegram
+телега = telegram
