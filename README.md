@@ -5,7 +5,10 @@
 Быстрые команды («пауза», «дальше», «терминал») распознаются офлайн через
 [Vosk](https://alphacephei.com/vosk/) по короткому списку слов — без задержек и без сети.
 Запросы «Джарвис, включи \<что угодно\>» распознаются через
-[faster-whisper](https://github.com/SYSTRAN/faster-whisper) и ищутся на YouTube.
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) и ищутся музыкой в Telegram
+(через отдельного бота — см. ниже); «Джарвис, найди на ютуб \<что угодно\>» — явный поиск
+видео на YouTube. Треки Mr. Kitty дополнительно доступны офлайн, отдельным быстрым словом
+без Whisper — см. раздел про Telegram.
 
 ## Требования
 
@@ -19,8 +22,9 @@
 ```bash
 git clone https://github.com/<твой-профиль>/voice-player.git
 cd voice-player
-./install.sh          # быстрые команды: пауза, дальше, звук, окна...
-./install.sh --ask     # плюс «джарвис, включи ...» и «загугли ...» (Whisper + yt-dlp)
+./install.sh                    # быстрые команды: пауза, дальше, звук, окна...
+./install.sh --ask              # плюс «джарвис, включи ...» и «загугли ...» (Whisper + yt-dlp)
+./install.sh --ask --telegram   # плюс поиск музыки через Telegram и офлайн-каталог Mr. Kitty
 ```
 
 Скрипт сам:
@@ -61,13 +65,55 @@ systemctl --user enable --now voice-player
 иначе при старте появится предупреждение и команда будет пропущена.
 
 Полезные флаги (`voice-player --help`): `--wake` (ключевое слово перед быстрыми командами),
-`--device` (источник звука), `--whisper tiny|base|small`, `--no-ask`, `--no-windows`, `--no-notify`.
+`--device` (источник звука), `--whisper tiny|base|small`, `--no-ask`, `--no-telegram`,
+`--no-windows`, `--no-notify`.
+
+## Telegram: поиск музыки и офлайн-каталог Mr. Kitty
+
+Работает через [Pyrogram](https://docs.pyrogram.org/) (MTProto) — **заведи под это отдельный
+аккаунт Telegram**, не основной: файл `telegram.toml` вместе с файлом сессии даёт полный доступ
+к тому аккаунту, под которым всё это залогинено.
+
+1. `./install.sh --ask --telegram`.
+2. Получи `api_id`/`api_hash` на [my.telegram.org/apps](https://my.telegram.org/apps) (по номеру
+   телефона того самого отдельного аккаунта) и впиши их в `~/.config/voice-player/telegram.toml`
+   вместе с юзернеймом канала Mr. Kitty (`mr_kitty_channel`) и юзернеймом бота для поиска
+   (`search_bot`) — образец в [`telegram.toml.example`](telegram.toml.example).
+3. Один раз **вручную из терминала** (не через systemd — это интерактивный логин: код из SMS,
+   возможно пароль 2FA):
+   ```bash
+   ~/.local/share/voice-player/venv/bin/voice-player-telegram-sync
+   ```
+   Скачает все треки из `mr_kitty_channel` в `~/.local/share/voice-player/telegram/tracks/` и
+   сгенерирует `~/.local/share/voice-player/telegram/tracks.txt` (`слово = путь` — тот же формат,
+   что `windows.txt`). В конце выведет, сколько слов из сгенерированных модель Vosk реально
+   знает — остальные (чаще всего англоязычные названия) стоит поправить в `tracks.txt` руками,
+   вписав то, что ты реально сможешь произнести и что есть в словаре модели.
+4. `systemctl --user restart voice-player`.
+
+Дальше два независимых способа:
+
+- **«Джарвис включи \<слово из tracks.txt\>»** (или поставь/найди/открой/покажи/запусти) — если
+  слово совпало, это офлайн-команда: играет сразу, без Whisper и без интернета, как «пауза» или
+  переключение окон.
+- Если словом не задело (или сказано что-то другое) — фраза уходит в Whisper, расшифрованный
+  запрос отправляется `search_bot`, автоматически нажимается первая кнопка в его ответе, а
+  результат скачивается и играет. Если бот не ответил или не нашёл ничего — тихо падает обратно
+  на YouTube-поиск (как при `--no-telegram`), так что фича работает мягко и не ломает старое
+  поведение.
+
+Запуск с `--no-telegram` (или без заполненного `telegram.toml`) возвращает старое поведение:
+«включи» ищет на YouTube. «Джарвис, найди на ютуб \<запрос\>» всегда идёт на YouTube независимо
+от Telegram-настроек.
+
+Проигрывание — через `mpv` (плагин `mpv-mpris` из AUR даёт `playerctl` видеть mpv так же, как
+браузер или Telegram; `install.sh --telegram` пробует поставить его через `yay`, если он есть).
 
 ## Разработка
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[ask]" pytest ruff
+pip install -e ".[ask,telegram]" pytest ruff
 pytest
 ruff check voice_player
 ```
@@ -78,13 +124,19 @@ ruff check voice_player
 |---|---|
 | `cli.py` | разбор аргументов, сборка компонентов, точка входа |
 | `config.py` | пути и константы |
-| `commands.py` | реестр быстрых команд, загрузка `windows.txt`/`sinks.txt` |
+| `commands.py` | реестр быстрых команд, загрузка `windows.txt`/`sinks.txt`/`tracks.txt` |
 | `grammar.py` | разбор распознанного текста в команду/запрос |
 | `loop.py` | основной цикл чтения микрофона (`VoiceLoop`) |
 | `players.py` | выбор плеера для команды через `playerctl` |
 | `windows.py` | переключение окон и полный экран через kdotool/KWin |
 | `dictation.py` | голосовой ввод текста («напиши», «отправь») |
-| `asker.py` | Whisper + поиск на YouTube («джарвис, включи ...») |
+| `asker.py` | Whisper + маршрутизация музыки/видео (Telegram / YouTube) |
+| `local_playback.py` | проигрывание скачанных файлов через mpv |
 | `uinput.py` | виртуальная клавиатура/мышь через `/dev/uinput` |
 | `clipboard.py` | буфер обмена KDE (Klipper) |
 | `audio.py` | переключение аудиовыхода, захват микрофона |
+| `logging_setup.py` | настройка логирования (уровни, форматирование) |
+| `telegram/settings.py` | чтение `telegram.toml` |
+| `telegram/client.py` | обёртка над Pyrogram-клиентом, поллинг-хелперы |
+| `telegram/search.py` | бот-поиск: сообщение → кнопка → скачанный файл |
+| `telegram/catalog.py` | `voice-player-telegram-sync`: скан канала Mr. Kitty → `tracks.txt` |

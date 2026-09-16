@@ -14,6 +14,7 @@ FULLSCREEN = "__fullscreen__"
 SCROLL = "__scroll__"
 SINK = "__sink__"
 SEND = "__send__"
+PLAY_TRACK = "__play_track__"  # локальный файл из телеграм-каталога, см. voice_player/telegram/
 
 # слово -> команда. Слова должны быть известны модели.
 COMMANDS: dict[str, list[str]] = {

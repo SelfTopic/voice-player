@@ -4,28 +4,44 @@ import logging
 import re
 
 from .commands import COMMANDS
-from .config import ASK_VERBS, ASK_WORD, DICTATE_WORDS, SEARCH_WORDS
+from .config import (
+    ASK_VERBS,
+    ASK_VERBS_FAST,
+    ASK_WORD,
+    DICTATE_WORDS,
+    SEARCH_WORDS,
+    YOUTUBE_TRIGGER_WORDS,
+)
 
 logger = logging.getLogger(__name__)
 
-# режим запросов: «джарвис включи ...»
+# режим запросов: «джарвис включи ...» — музыка, уходит в Telegram (см. asker.py)
 ASK = "__ask__"
+# «джарвис найди на ютуб ...» — единственный способ явно попасть в YouTube
+ASK_YOUTUBE = "__ask_youtube__"
 # поиск в Google: «загугли ...»
 GOOGLE = "__google__"
 # голосовой ввод: «напиши ...» вставляет текст, «отправь» жмёт Enter
 DICTATE = "__dictate__"
 
-# подсказка Whisper под режим; для YouTube — своя, с исполнителями (build_prompt)
+# подсказка Whisper под режим; для музыки (ASK) — своя, с исполнителями (build_prompt)
 PROMPTS = {
     GOOGLE: "Загугли, как приготовить борщ.",
     DICTATE: "Напиши: привет, как дела? Буду через 10 минут.",
+    ASK_YOUTUBE: "Джарвис, найди на ютуб, как приготовить борщ.",
 }
 
 VERB_RE = re.compile(r"(?:" + "|".join(ASK_VERBS) + r")\w*[\s,.:!—–-]*(.*)", re.I | re.S)
+YOUTUBE_RE = re.compile(r"найди\w*[\s,.:!—–-]*на\w*[\s,.:!—–-]*ютуб\w*[\s,.:!—–-]*(.*)", re.I | re.S)
 SEARCH_RE = re.compile(r"(?:(?:за|по)?гугл|поищ)\w*[\s,.:!—–-]*(.*)", re.I | re.S)
 DICTATE_RE = re.compile(r"(?:напиш|набер|введ)\w*[\s,.:!—–-]*(.*)", re.I | re.S)
 WAKE_RE = re.compile(r"(?:джарвис|jarvis)\w*[\s,.:!—–-]*(.*)", re.I | re.S)
 FILLER_RE = re.compile(r"^(?:(?:мне|пожалуйста|песню|песня|видео|видос|клип|трек)\s+)+", re.I)
+
+
+def _contains_sequence(words: list[str], sequence: list[str]) -> bool:
+    n = len(sequence)
+    return any(words[i : i + n] == sequence for i in range(len(words) - n + 1))
 
 
 def known_words(model, phrases: list[str]) -> list[str]:
@@ -60,7 +76,17 @@ def command_at_end(text: str, wake: str | None, ask: bool) -> str | None:
     words = [w for w in text.split() if w != "[unk]"]
     if not words:
         return None
-    if ask and len(words) >= 2 and words[-2] == ASK_WORD and words[-1] in ASK_VERBS:
+    n = len(YOUTUBE_TRIGGER_WORDS)
+    if (
+        ask
+        and len(words) >= n + 1
+        and words[-n:] == YOUTUBE_TRIGGER_WORDS
+        and words[-n - 1] == ASK_WORD
+    ):
+        return ASK_YOUTUBE
+    # «найди» — префикс «найди на ютуб», поэтому в быстром partial-пути не участвует: иначе
+    # можно выстрелить в Telegram раньше, чем модель договорит «на ютуб» (см. config.py).
+    if ask and len(words) >= 2 and words[-2] == ASK_WORD and words[-1] in ASK_VERBS_FAST:
         return ASK
     for mode, trigger_words in ((GOOGLE, SEARCH_WORDS), (DICTATE, DICTATE_WORDS)):
         if ask and words[-1] in trigger_words and (not wake or (len(words) >= 2 and words[-2] == wake)):
@@ -80,8 +106,10 @@ def command_at_end(text: str, wake: str | None, ask: bool) -> str | None:
 
 
 def ask_mode(text: str) -> str | None:
-    """Финальный результат: есть ли в нём запрос, и какой — YouTube или Google."""
+    """Финальный результат: есть ли в нём запрос, и какой — YouTube, музыка или Google."""
     words = text.split()
+    if _contains_sequence(words, [ASK_WORD, *YOUTUBE_TRIGGER_WORDS]):
+        return ASK_YOUTUBE
     if any(a == ASK_WORD and b in ASK_VERBS for a, b in zip(words, words[1:])):
         return ASK
     if any(w in DICTATE_WORDS for w in words):
@@ -94,14 +122,14 @@ def ask_mode(text: str) -> str | None:
 def extract_query(text: str, mode: str = ASK) -> str:
     """«Джарвис, включи мне Linkin Park — Numb.» -> «Linkin Park — Numb»
     «Загугли погоду в Москве» (mode=GOOGLE) -> «погоду в Москве»"""
-    regex = {GOOGLE: SEARCH_RE, DICTATE: DICTATE_RE}.get(mode, VERB_RE)
+    regex = {GOOGLE: SEARCH_RE, DICTATE: DICTATE_RE, ASK_YOUTUBE: YOUTUBE_RE}.get(mode, VERB_RE)
     m = regex.search(text) or WAKE_RE.search(text)
     if not m:
         return ""  # ни глагола, ни ключевого слова: скорее всего Whisper нафантазировал
     query = m.group(1).strip()
     if mode == DICTATE:
         return query.lstrip(" ,.:;—–-")  # знаки в конце — часть сообщения
-    if mode == ASK:
+    if mode in (ASK, ASK_YOUTUBE):
         query = FILLER_RE.sub("", query)
     return query.strip(" .,!?:;—–-«»\"'")
 

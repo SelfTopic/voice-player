@@ -5,10 +5,11 @@ import logging
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 from .asker import Asker
 from .audio import switch_sink
-from .commands import COMMANDS, FULLSCREEN, PLAYER, SCROLL, SEND, SINK
+from .commands import COMMANDS, FULLSCREEN, PLAY_TRACK, PLAYER, SCROLL, SEND, SINK
 from .config import (
     ASK_MAX_SEC,
     ASK_MIN_SEC,
@@ -19,7 +20,16 @@ from .config import (
     SAMPLE_RATE,
 )
 from .dictation import Dictation, send_enter
-from .grammar import ASK, DICTATE, GOOGLE, ask_mode, command_at_end, parse_command
+from .grammar import (
+    ASK,
+    ASK_YOUTUBE,
+    DICTATE,
+    GOOGLE,
+    ask_mode,
+    command_at_end,
+    parse_command,
+)
+from .local_playback import play_local_file
 from .notify import notify, run_quiet
 from .players import Players
 from .uinput import UInputDevice
@@ -145,7 +155,7 @@ class VoiceLoop:
         else:
             self.candidate, self.streak = cmd, 1 if cmd else 0
         if cmd and self.streak >= self.stable:
-            if cmd in (ASK, GOOGLE, DICTATE):
+            if cmd in (ASK, ASK_YOUTUBE, GOOGLE, DICTATE):
                 self._start_ask(cmd)
             else:
                 self._fire(cmd, now, "быстро")
@@ -177,6 +187,10 @@ class VoiceLoop:
             threading.Thread(target=switch_sink, args=(argv[1], argv[2], self.notify_on), daemon=True).start()
         elif argv[0] == SCROLL:
             threading.Thread(target=self.mouse.scroll, args=(int(argv[1]),), daemon=True).start()
+        elif argv[0] == PLAY_TRACK:
+            threading.Thread(
+                target=play_local_file, args=(Path(argv[1]), self.players, cmd, self.notify_on), daemon=True,
+            ).start()
         elif argv[0] == FULLSCREEN:
             threading.Thread(
                 target=toggle_fullscreen,

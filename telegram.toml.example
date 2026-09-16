@@ -1,0 +1,24 @@
+# Настройки Telegram-интеграции (голосовой поиск музыки + офлайн-каталог Mr. Kitty).
+#
+# ВАЖНО: заведи под это отдельный (не основной) аккаунт Telegram — этот файл вместе с
+# session-файлом даёт полный доступ к аккаунту, под которым запущен.
+#
+# api_id и api_hash получаются на https://my.telegram.org/apps (нужен номер телефона аккаунта,
+# под которым будет работать voice-player).
+#
+# Скопируй этот файл в ~/.config/voice-player/telegram.toml и заполни поля, затем один раз
+# вручную (не из systemd!) запусти voice-player-telegram-sync — он попросит код подтверждения
+# и создаст файл сессии.
+
+api_id = 0
+api_hash = ""
+
+# как называть файл сессии Pyrogram (~/.local/share/voice-player/telegram/<session_name>.session)
+session_name = "voice-player"
+
+# публичный канал с треками Mr. Kitty, например "@some_channel" — сканирует voice-player-telegram-sync
+mr_kitty_channel = "@channel_username"
+
+# бот, которому голосом отправляется запрос («джарвис, включи ...»); первая кнопка в его
+# ответе считается результатом
+search_bot = "@music_search_bot"

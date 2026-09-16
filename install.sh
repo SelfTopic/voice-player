@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 # Установка голосового управления плеером (Manjaro / Arch)
-#   ./install.sh         быстрые команды (пауза, дальше, ...)
-#   ./install.sh --ask   плюс запросы «джарвис, включи ...» (Whisper + yt-dlp, ~110 МБ пакетов)
+#   ./install.sh                     быстрые команды (пауза, дальше, ...)
+#   ./install.sh --ask               плюс запросы «джарвис, включи ...» (Whisper + yt-dlp, ~110 МБ)
+#   ./install.sh --telegram          плюс поиск музыки через Telegram (Pyrogram) + офлайн-каталог Mr. Kitty
+#   ./install.sh --ask --telegram    и то, и другое (--telegram без --ask бессмысленен: запросы идут через Whisper)
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 DATA="$HOME/.local/share/voice-player"
 MODEL_NAME="vosk-model-small-ru-0.22"
 ASK=0
-[ "${1:-}" = "--ask" ] && ASK=1
+TELEGRAM=0
+for arg in "$@"; do
+  case "$arg" in
+    --ask) ASK=1 ;;
+    --telegram) TELEGRAM=1 ;;
+    *) echo "неизвестный флаг: $arg" >&2; exit 1 ;;
+  esac
+done
 
 echo "==> пакеты"
 # ставим только отсутствующее; уже установленные пакеты не трогаем (без частичных обновлений)
 declare -A NEED=([playerctl]=playerctl [notify-send]=libnotify [parec]=libpulse [python]=python [xdg-open]=xdg-utils)
+[ "$TELEGRAM" = 1 ] && NEED[mpv]=mpv
 missing=()
 for bin in "${!NEED[@]}"; do
   command -v "$bin" >/dev/null || missing+=("${NEED[$bin]}")
@@ -25,15 +35,30 @@ else
   echo "всё уже установлено"
 fi
 
+if [ "$TELEGRAM" = 1 ]; then
+  echo "==> mpv-mpris (чтобы playerctl видел mpv; пакета нет в official repos, ставим из AUR)"
+  if pacman -Qi mpv-mpris >/dev/null 2>&1; then
+    echo "уже есть"
+  elif command -v yay >/dev/null; then
+    yay -S --needed --noconfirm mpv-mpris
+  else
+    echo "нет yay — поставь mpv-mpris вручную (AUR), иначе пауза/дальше не увидят mpv"
+  fi
+fi
+
 echo "==> python-окружение"
 mkdir -p "$DATA"
 [ -x "$DATA/venv/bin/python" ] || python -m venv "$DATA/venv"
-if [ "$ASK" = 1 ]; then
-  echo "==> voice-player + Whisper и yt-dlp (~110 МБ)"
-  "$DATA/venv/bin/pip" install --upgrade --quiet "$SRC[ask]"
+extras=()
+[ "$ASK" = 1 ] && extras+=("ask")
+[ "$TELEGRAM" = 1 ] && extras+=("telegram")
+if [ ${#extras[@]} -gt 0 ]; then
+  spec="$SRC[$(IFS=,; echo "${extras[*]}")]"
+  echo "==> voice-player + ${extras[*]}"
 else
-  "$DATA/venv/bin/pip" install --upgrade --quiet "$SRC"
+  spec="$SRC"
 fi
+"$DATA/venv/bin/pip" install --upgrade --quiet "$spec"
 
 echo "==> модель распознавания (~45 МБ)"
 if [ ! -d "$DATA/model" ]; then
@@ -81,6 +106,9 @@ echo "==> конфиги"
 [ -f "$HOME/.config/voice-player/names.txt" ] || install -Dm 644 "$SRC/names.txt" "$HOME/.config/voice-player/names.txt"
 [ -f "$HOME/.config/voice-player/windows.txt" ] || install -Dm 644 "$SRC/windows.txt" "$HOME/.config/voice-player/windows.txt"
 [ -f "$HOME/.config/voice-player/sinks.txt" ] || install -Dm 644 "$SRC/sinks.txt" "$HOME/.config/voice-player/sinks.txt"
+if [ "$TELEGRAM" = 1 ]; then
+  [ -f "$HOME/.config/voice-player/telegram.toml" ] || install -Dm 600 "$SRC/telegram.toml.example" "$HOME/.config/voice-player/telegram.toml"
+fi
 install -Dm 644 "$SRC/voice-player.service" "$HOME/.config/systemd/user/voice-player.service"
 systemctl --user daemon-reload
 
@@ -90,6 +118,15 @@ cat <<EOF
   $DATA/venv/bin/voice-player -v
 EOF
 [ "$ASK" = 1 ] && echo "  (при первом запуске скачается модель Whisper base, ~145 МБ)"
+if [ "$TELEGRAM" = 1 ]; then
+  cat <<EOF
+
+Telegram: заполни ~/.config/voice-player/telegram.toml (api_id/api_hash с my.telegram.org,
+канал Mr. Kitty, бот для поиска), затем один раз ВРУЧНУЮ из терминала (не через systemd —
+это интерактивный логин с кодом подтверждения):
+  $DATA/venv/bin/voice-player-telegram-sync
+EOF
+fi
 cat <<EOF
 
 Автозапуск:

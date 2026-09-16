@@ -1,5 +1,6 @@
 from voice_player.grammar import (
     ASK,
+    ASK_YOUTUBE,
     DICTATE,
     GOOGLE,
     ask_mode,
@@ -59,6 +60,22 @@ class TestCommandAtEnd:
         assert command_at_end("джарвис погугли", "джарвис", True) == GOOGLE
         assert command_at_end("погугли", "джарвис", True) is None
 
+    def test_youtube_trigger_full_phrase(self):
+        assert command_at_end("джарвис найди на ютуб", None, True) == ASK_YOUTUBE
+
+    def test_youtube_trigger_requires_ask_word_right_before(self):
+        assert command_at_end("скажи найди на ютуб", None, True) is None
+
+    def test_youtube_trigger_incomplete_phrase_is_not_ask_yet(self):
+        # «найди» — префикс «найди на ютуб»: пока фраза не договорена, ни один режим не должен
+        # выстрелить (иначе быстрый partial-путь мог бы преждевременно уйти в Telegram)
+        assert command_at_end("джарвис найди", None, True) is None
+        assert command_at_end("джарвис найди на", None, True) is None
+
+    def test_ask_fast_verbs_still_trigger_immediately(self):
+        for verb in ("включи", "поставь", "открой", "покажи", "запусти"):
+            assert command_at_end(f"джарвис {verb}", None, True) == ASK
+
 
 class TestAskMode:
     def test_ask(self):
@@ -77,6 +94,17 @@ class TestAskMode:
         # «включи» сразу после «джарвис» -> ASK, даже если дальше встретится другое триггер-слово
         assert ask_mode("джарвис включи напиши мне текст") == ASK
 
+    def test_youtube(self):
+        assert ask_mode("джарвис найди на ютуб как приготовить борщ") == ASK_YOUTUBE
+
+    def test_youtube_takes_priority_over_ask(self):
+        # «найди» само по себе входит в ASK_VERBS — без приоритета YouTube тут получился бы ASK
+        assert ask_mode("джарвис найди на ютуб клип") == ASK_YOUTUBE
+
+    def test_naidi_alone_is_ask_on_final_result(self):
+        # в отличие от command_at_end (быстрый путь), тут «найди» без «на ютуб» уже видно целиком
+        assert ask_mode("джарвис найди эту песню") == ASK
+
 
 class TestExtractQuery:
     def test_ask_strips_verb_and_fillers(self):
@@ -93,6 +121,9 @@ class TestExtractQuery:
 
     def test_ask_strips_quotes_and_dashes(self):
         assert extract_query("джарвис включи «намб» —") == "намб"
+
+    def test_youtube_strips_trigger_phrase(self):
+        assert extract_query("джарвис найди на ютубе как приготовить борщ", ASK_YOUTUBE) == "как приготовить борщ"
 
 
 def test_build_grammar_with_wake_word():

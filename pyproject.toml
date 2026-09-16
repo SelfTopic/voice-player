@@ -7,10 +7,12 @@ dependencies = ["vosk"]
 
 [project.optional-dependencies]
 ask = ["faster-whisper", "yt-dlp", "numpy"]
+telegram = ["pyrogram", "tgcrypto"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
 voice-player = "voice_player.cli:main"
+voice-player-telegram-sync = "voice_player.telegram.catalog:main"
 
 [build-system]
 requires = ["setuptools>=68"]

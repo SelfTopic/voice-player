@@ -12,7 +12,16 @@ from vosk import KaldiRecognizer, Model, SetLogLevel
 from . import __doc__ as description
 from .asker import Asker
 from .audio import mic_process
-from .commands import COMMANDS, FULLSCREEN, SCROLL, SEND, SINK, load_mapping, read_lines
+from .commands import (
+    COMMANDS,
+    FULLSCREEN,
+    PLAY_TRACK,
+    SCROLL,
+    SEND,
+    SINK,
+    load_mapping,
+    read_lines,
+)
 from .config import (
     ASK_VERBS,
     ASK_WORD,
@@ -24,12 +33,16 @@ from .config import (
     SAMPLE_RATE,
     SEARCH_WORDS,
     SINK_WORD,
+    TELEGRAM_TRACKS,
+    YOUTUBE_TRIGGER_WORDS,
 )
 from .dictation import Dictation
 from .grammar import build_grammar, known_words
 from .logging_setup import configure as configure_logging
 from .loop import VoiceLoop
 from .players import Players
+from .telegram.search import TelegramSearch
+from .telegram.settings import load_settings as load_telegram_settings
 from .uinput import (
     BTN_LEFT,
     BTN_RIGHT,
@@ -67,7 +80,12 @@ def parse_args() -> argparse.Namespace:
     )
     ap.add_argument("--windows", type=Path, default=DEFAULT_WINDOWS, help="файл «слово = класс окна»")
     ap.add_argument("--sinks", type=Path, default=DEFAULT_SINKS, help="файл «слово = имя устройства вывода звука»")
+    ap.add_argument(
+        "--tracks", type=Path, default=TELEGRAM_TRACKS,
+        help="файл «слово = путь к mp3» для офлайн-каталога Mr. Kitty (voice-player-telegram-sync)",
+    )
     ap.add_argument("--no-ask", action="store_true", help="выключить запросы «джарвис, включи ...»")
+    ap.add_argument("--no-telegram", action="store_true", help="искать музыку только на YouTube, без Telegram")
     ap.add_argument("--no-windows", action="store_true", help="выключить переключение окон")
     ap.add_argument("--no-notify", action="store_true", help="не показывать уведомления")
     ap.add_argument("-v", "--verbose", action="store_true", help="печатать всё распознанное")
@@ -107,6 +125,29 @@ def register_sink_commands(args: argparse.Namespace) -> None:
         COMMANDS[f"{SINK_WORD} {word}"] = [SINK, pattern, word]
 
 
+def register_telegram_track_commands(args: argparse.Namespace) -> None:
+    """Слова из офлайн-каталога Mr. Kitty (voice-player-telegram-sync) — как windows.txt,
+    но без Whisper: сразу быстрая команда «включить локальный файл»."""
+    for word, path in load_mapping(args.tracks, {}).items():
+        if word in COMMANDS:
+            logger.warning("«%s» уже занято другой командой, трек пропущен", word)
+            continue
+        COMMANDS[word] = [PLAY_TRACK, path]
+
+
+def make_telegram(args: argparse.Namespace) -> TelegramSearch | None:
+    if args.no_telegram:
+        return None
+    settings = load_telegram_settings()
+    if settings is None:
+        return None
+    try:
+        return TelegramSearch(settings)
+    except ImportError as e:
+        logger.warning("телеграм-поиск выключен: %s (запусти install.sh --telegram)", e)
+        return None
+
+
 def make_input_devices(kdotool: str | None) -> tuple[UInputDevice | None, UInputDevice | None]:
     keyboard = mouse = None
     try:
@@ -125,7 +166,7 @@ def make_input_devices(kdotool: str | None) -> tuple[UInputDevice | None, UInput
 
 def make_asker(
     args: argparse.Namespace, players: Players, kdotool: str | None,
-    keyboard: UInputDevice | None, dictation: Dictation,
+    keyboard: UInputDevice | None, dictation: Dictation, telegram: TelegramSearch | None,
 ) -> Asker | None:
     if args.no_ask:
         return None
@@ -134,7 +175,7 @@ def make_asker(
     if names:
         logger.info("подсказки для Whisper: %s", ", ".join(names))
     try:
-        return Asker(args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify)
+        return Asker(args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify, telegram)
     except ImportError as e:
         logger.warning("запросы выключены: %s (запусти install.sh --ask)", e)
         return None
@@ -146,7 +187,9 @@ def build_recognizers(
     phrases = known_words(model, list(COMMANDS))
     trigger_words = SEARCH_WORDS + (DICTATE_WORDS if keyboard else [])  # вставке текста нужны kdotool и uinput
     search_phrases = [f"{wake} {w}" for w in trigger_words] if wake else trigger_words
-    ask_phrases = known_words(model, [f"{ASK_WORD} {v}" for v in ASK_VERBS] + search_phrases) if asker else []
+    verb_phrases = [f"{ASK_WORD} {v}" for v in ASK_VERBS]
+    youtube_phrase = f"{ASK_WORD} {' '.join(YOUTUBE_TRIGGER_WORDS)}"
+    ask_phrases = known_words(model, verb_phrases + [youtube_phrase] + search_phrases) if asker else []
     grammar = build_grammar(wake, phrases, ask_phrases)
     rec = KaldiRecognizer(model, SAMPLE_RATE, json.dumps(grammar, ensure_ascii=False))
     rec.SetWords(True)
@@ -164,7 +207,10 @@ def print_startup_summary(
         logger.info("окна: %s", ", ".join(active_windows))
     if asker:
         extra = ", «напиши <текст>» и «отправь»" if keyboard else ""
-        logger.info("и запросы: «%s, включи <песня или видео>», «загугли <запрос>»%s", ASK_WORD, extra)
+        logger.info(
+            "и запросы: «%s, включи <песня>» (телеграм), «%s, найди на ютуб <запрос>», «загугли <запрос>»%s",
+            ASK_WORD, ASK_WORD, extra,
+        )
 
 
 def main() -> None:
@@ -178,8 +224,10 @@ def main() -> None:
 
     window_patterns = register_window_commands(args, kdotool)
     register_sink_commands(args)
+    register_telegram_track_commands(args)
     keyboard, mouse = make_input_devices(kdotool)
-    asker = make_asker(args, players, kdotool, keyboard, dictation)
+    telegram = make_telegram(args)
+    asker = make_asker(args, players, kdotool, keyboard, dictation, telegram)
 
     rec, free, phrases = build_recognizers(model, wake, asker, keyboard)
 
@@ -194,7 +242,11 @@ def main() -> None:
         kdotool=kdotool, keyboard=keyboard, mouse=mouse, window_patterns=window_patterns,
         wake=wake, stable=args.stable, min_conf=args.min_conf, notify_on=not args.no_notify,
     )
-    loop.run()
+    try:
+        loop.run()
+    finally:
+        if asker:
+            asker.close()
 
 
 if __name__ == "__main__":

@@ -12,6 +12,13 @@ DEFAULT_NAMES = CONFIG_DIR / "names.txt"
 DEFAULT_WINDOWS = CONFIG_DIR / "windows.txt"
 DEFAULT_SINKS = CONFIG_DIR / "sinks.txt"
 
+TELEGRAM_DATA_DIR = DATA_DIR / "telegram"
+TELEGRAM_CONFIG = CONFIG_DIR / "telegram.toml"
+TELEGRAM_TRACKS = TELEGRAM_DATA_DIR / "tracks.txt"
+TELEGRAM_SEARCH_TIMEOUT_SEC = 15.0  # ждать от бота сообщение с кнопками
+TELEGRAM_DOWNLOAD_TIMEOUT_SEC = 20.0  # ждать аудио после нажатия кнопки
+TELEGRAM_POLL_INTERVAL_SEC = 0.5
+
 SCROLL_NOTCHES = 5  # щелчков колеса за команду, в большинстве программ это ~15 строк
 SINK_WORD = "звук"  # «звук наушники», «звук монитор»
 SEND_WINDOW_SEC = 120  # «отправь» работает столько секунд после «напиши» и только в том же окне
@@ -27,6 +34,12 @@ MUTE_SEC = 0.35
 
 ASK_WORD = "джарвис"
 ASK_VERBS = ["включи", "поставь", "найди", "открой", "покажи", "запусти"]
+# «найди» исключено: это ещё и префикс YOUTUBE_TRIGGER_WORDS («найди на ютуб»), а быстрый
+# partial-путь стреляет по последним словам сразу — рано отличить «найди X» от «найди на ютуб».
+# «найди» без «на ютуб» ловится только на конце фразы через ask_mode(), см. grammar.py.
+ASK_VERBS_FAST = [v for v in ASK_VERBS if v != "найди"]
+# «джарвис найди на ютуб X» — единственный способ явно попасть в YouTube, а не в Telegram.
+YOUTUBE_TRIGGER_WORDS = ["найди", "на", "ютуб"]
 # поиск в Google: «загугли ...». Самого «загугли» модель не знает и обычно слышит его как «гугл».
 SEARCH_WORDS = ["погугли", "гугл", "поищи"]
 # голосовой ввод: «напиши ...» вставляет текст в активное окно, «отправь» жмёт Enter

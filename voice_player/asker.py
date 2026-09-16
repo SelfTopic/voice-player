@@ -7,9 +7,11 @@ import urllib.parse
 from .clipboard import clipboard_get, clipboard_set
 from .config import BROWSER_PATTERN
 from .dictation import Dictation, type_text
-from .grammar import ASK, DICTATE, GOOGLE, PROMPTS, extract_query
+from .grammar import ASK, ASK_YOUTUBE, DICTATE, GOOGLE, PROMPTS, extract_query
+from .local_playback import play_local_file
 from .notify import notify, run_quiet
 from .players import Players, playerctl
+from .telegram.search import TelegramSearch
 from .uinput import KEY_ENTER, KEY_ESC, KEY_L, KEY_LEFTCTRL, KEY_V, UInputDevice
 from .windows import focus_window
 
@@ -46,6 +48,7 @@ class Asker:
     def __init__(
         self, whisper_model: str, names: list[str], players: Players,
         kdotool: str | None, keyboard: "UInputDevice | None", dictation: Dictation, notify_on: bool,
+        telegram: TelegramSearch | None = None,
     ):
         import numpy as np
         import yt_dlp
@@ -58,8 +61,13 @@ class Asker:
         self.kdotool, self.keyboard = kdotool, keyboard
         self.dictation = dictation
         self.notify_on = notify_on
+        self.telegram = telegram
         self.prompt = build_prompt(names)
         self.whisper = WhisperModel(whisper_model, device="cpu", compute_type="int8")
+
+    def close(self) -> None:
+        if self.telegram:
+            self.telegram.close()
 
     def say(self, text: str) -> None:
         logger.info(text)
@@ -103,23 +111,11 @@ class Asker:
                 run_quiet(["xdg-open", "https://www.google.com/search?q=" + urllib.parse.quote_plus(query)])
                 self.say(f"🔎 {query}")
                 return
-            self.say(f"ищу: {query}")
-            t = time.monotonic()
-            video = self.search(query)
-            if not video:
-                self.say(f"ничего не нашёл: {query}")
-                return
-            logger.debug("поиск: %.1f с", time.monotonic() - t)
-            url = f"https://www.youtube.com/watch?v={video['id']}"
-            if replace_youtube_tab(self.kdotool, self.keyboard, url):
-                where = "в той же вкладке"
-            else:
-                run_quiet(["xdg-open", url])
-                where = "в новой вкладке"
-            playback_replaced = True
-            self.players.name(BROWSER_PATTERN)
-            self.say(f"▶ {video.get('title') or query}")
-            logger.debug("открыто %s", where)
+            if mode == ASK and self.telegram:
+                playback_replaced = self._play_from_telegram(query)
+                if playback_replaced:
+                    return
+            playback_replaced = self._search_youtube(query)
         except Exception as e:
             logger.debug("необработанная ошибка в Asker.handle", exc_info=True)
             self.say(f"ошибка: {e}")
@@ -127,3 +123,36 @@ class Asker:
             if not playback_replaced:
                 for instance in paused:
                     playerctl(instance, "play")
+
+    def _play_from_telegram(self, query: str) -> bool:
+        """Режим ASK (музыка): поискать у бота в Telegram. -> нашли и запустили?"""
+        self.say(f"ищу в телеграме: {query}")
+        t = time.monotonic()
+        track = self.telegram.find_track(query)
+        logger.debug("телеграм-поиск: %.1f с", time.monotonic() - t)
+        if not track:
+            logger.debug("телеграм ничего не нашёл, пробую youtube")
+            return False
+        play_local_file(track, self.players, query, notify_on=False)  # своё "▶" даст self.say ниже
+        self.say(f"▶ {query}")
+        return True
+
+    def _search_youtube(self, query: str) -> bool:
+        """Режим ASK_YOUTUBE, и подстраховка для ASK, если телеграм не нашёл. -> нашли и открыли?"""
+        self.say(f"ищу: {query}")
+        t = time.monotonic()
+        video = self.search(query)
+        if not video:
+            self.say(f"ничего не нашёл: {query}")
+            return False
+        logger.debug("поиск: %.1f с", time.monotonic() - t)
+        url = f"https://www.youtube.com/watch?v={video['id']}"
+        if replace_youtube_tab(self.kdotool, self.keyboard, url):
+            where = "в той же вкладке"
+        else:
+            run_quiet(["xdg-open", url])
+            where = "в новой вкладке"
+        self.players.name(BROWSER_PATTERN)
+        self.say(f"▶ {video.get('title') or query}")
+        logger.debug("открыто %s", where)
+        return True
