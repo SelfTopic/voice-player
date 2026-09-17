@@ -4,15 +4,15 @@ from voice_player.local_playback import play_local_file
 from voice_player.players import Players
 
 
-def test_play_local_file_launches_mpv_and_registers_player(monkeypatch):
+def test_play_local_file_launches_vlc_and_registers_player(monkeypatch):
     calls = []
     monkeypatch.setattr("voice_player.local_playback.run_quiet", lambda cmd: calls.append(cmd))
     players = Players()
 
     play_local_file(Path("/tmp/track.mp3"), players, "трек", notify_on=False)
 
-    assert calls == [["mpv", "--no-video", "/tmp/track.mp3"]]
-    assert players.named == "mpv"
+    assert calls == [["vlc", "--intf", "dummy", "--no-video", "--play-and-exit", "/tmp/track.mp3"]]
+    assert players.named == "vlc"
 
 
 def test_play_local_file_notifies_when_enabled(monkeypatch):

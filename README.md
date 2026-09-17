@@ -113,8 +113,8 @@ systemctl --user enable --now voice-player
 «включи» ищет на YouTube. «Джарвис, найди на ютуб \<запрос\>» всегда идёт на YouTube независимо
 от Telegram-настроек.
 
-Проигрывание — через `mpv` (плагин `mpv-mpris` из AUR даёт `playerctl` видеть mpv так же, как
-браузер или Telegram; `install.sh --telegram` пробует поставить его через `yay`, если он есть).
+Проигрывание — через `vlc` (обычный пакет из официальных репозиториев; MPRIS у него встроен,
+`playerctl` видит его так же, как браузер или Telegram — никаких AUR-пакетов не нужно).
 
 ## Разработка
 
@@ -138,7 +138,7 @@ ruff check voice_player
 | `windows.py` | переключение окон и полный экран через kdotool/KWin |
 | `dictation.py` | голосовой ввод текста («напиши», «отправь») |
 | `asker.py` | Whisper + маршрутизация музыки/видео (Telegram / YouTube) |
-| `local_playback.py` | проигрывание скачанных файлов через mpv |
+| `local_playback.py` | проигрывание скачанных файлов через vlc |
 | `uinput.py` | виртуальная клавиатура/мышь через `/dev/uinput` |
 | `clipboard.py` | буфер обмена KDE (Klipper) |
 | `audio.py` | переключение аудиовыхода, захват микрофона |

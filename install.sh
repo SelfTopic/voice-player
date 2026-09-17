@@ -22,7 +22,9 @@ done
 echo "==> пакеты"
 # ставим только отсутствующее; уже установленные пакеты не трогаем (без частичных обновлений)
 declare -A NEED=([playerctl]=playerctl [notify-send]=libnotify [parec]=libpulse [python]=python [xdg-open]=xdg-utils)
-[ "$TELEGRAM" = 1 ] && NEED[mpv]=mpv
+# vlc — проигрывание того, что скачал voice-player-telegram-sync/бот-поиск; MPRIS у vlc
+# встроен (плагин control/dbus в самом пакете), в отличие от mpv не тянет отдельный AUR-пакет
+[ "$TELEGRAM" = 1 ] && NEED[vlc]=vlc
 missing=()
 for bin in "${!NEED[@]}"; do
   command -v "$bin" >/dev/null || missing+=("${NEED[$bin]}")
@@ -33,17 +35,6 @@ if [ ${#missing[@]} -gt 0 ]; then
   sudo pacman -S --needed "${missing[@]}"
 else
   echo "всё уже установлено"
-fi
-
-if [ "$TELEGRAM" = 1 ]; then
-  echo "==> mpv-mpris (чтобы playerctl видел mpv; пакета нет в official repos, ставим из AUR)"
-  if pacman -Qi mpv-mpris >/dev/null 2>&1; then
-    echo "уже есть"
-  elif command -v yay >/dev/null; then
-    yay -S --needed --noconfirm mpv-mpris
-  else
-    echo "нет yay — поставь mpv-mpris вручную (AUR), иначе пауза/дальше не увидят mpv"
-  fi
 fi
 
 echo "==> python-окружение"
