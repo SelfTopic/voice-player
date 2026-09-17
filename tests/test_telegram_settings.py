@@ -23,6 +23,23 @@ def test_load_settings_parses_valid_file(tmp_path):
     )
 
 
+def test_load_settings_accepts_numeric_search_bot_id(tmp_path):
+    # у бота может не быть (или сменился) юзернейм — числовой id работает так же
+    path = tmp_path / "telegram.toml"
+    path.write_text(
+        """
+        api_id = 12345
+        api_hash = "abc"
+        session_name = "voice-player"
+        mr_kitty_channel = "@kitty"
+        search_bot = 5297353009
+        """,
+        encoding="utf-8",
+    )
+    settings = load_settings(path)
+    assert settings.search_bot == 5297353009
+
+
 def test_load_settings_missing_field_returns_none(tmp_path, caplog):
     import logging
 

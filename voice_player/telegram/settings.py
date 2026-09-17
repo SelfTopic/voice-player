@@ -18,7 +18,7 @@ class TelegramSettings:
     api_hash: str
     session_name: str
     mr_kitty_channel: str
-    search_bot: str
+    search_bot: int | str  # @username или числовой id
     # регулярка (без учёта регистра): треки с совпадением в названии voice-player-telegram-sync
     # не скачивает — каверы, ремиксы и т.п., которые обычно не нужны в офлайн-каталоге
     skip_titles_matching: str = ""
