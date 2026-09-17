@@ -3,21 +3,31 @@
 #   ./install.sh                     быстрые команды (пауза, дальше, ...)
 #   ./install.sh --ask               плюс запросы «джарвис, включи ...» (Whisper + yt-dlp, ~110 МБ)
 #   ./install.sh --telegram          плюс поиск музыки через Telegram (Pyrogram) + офлайн-каталог Mr. Kitty
-#   ./install.sh --ask --telegram    и то, и другое (--telegram без --ask бессмысленен: запросы идут через Whisper)
+#   ./install.sh --big-model         вместо маленькой модели Vosk (~45 МБ) — большая (~1.8 ГБ, ru-0.42):
+#                                    заметно точнее и знает куда больше заимствованных/иностранных слов.
+#                                    Vosk сама называет её моделью "для серверов" — в памяти весит
+#                                    сильно больше 1.8 ГБ; на машине с 8 ГБ RAM и открытым браузером/IDE
+#                                    может увести систему в своп. Нужно несколько свободных гигабайт RAM.
+#   ./install.sh --ask --telegram    любые флаги сочетаются (--telegram без --ask бессмысленен)
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 DATA="$HOME/.local/share/voice-player"
-MODEL_NAME="vosk-model-small-ru-0.22"
+MODEL_SMALL="vosk-model-small-ru-0.22"
+MODEL_BIG="vosk-model-ru-0.42"
 ASK=0
 TELEGRAM=0
+BIG_MODEL=0
 for arg in "$@"; do
   case "$arg" in
     --ask) ASK=1 ;;
     --telegram) TELEGRAM=1 ;;
+    --big-model) BIG_MODEL=1 ;;
     *) echo "неизвестный флаг: $arg" >&2; exit 1 ;;
   esac
 done
+MODEL_NAME="$MODEL_SMALL"
+[ "$BIG_MODEL" = 1 ] && MODEL_NAME="$MODEL_BIG"
 
 echo "==> пакеты"
 # ставим только отсутствующее; уже установленные пакеты не трогаем (без частичных обновлений)
@@ -51,8 +61,13 @@ else
 fi
 "$DATA/venv/bin/pip" install --upgrade --quiet "$spec"
 
-echo "==> модель распознавания (~45 МБ)"
-if [ ! -d "$DATA/model" ]; then
+MODEL_SIZE="~45 МБ"
+[ "$BIG_MODEL" = 1 ] && MODEL_SIZE="~1.8 ГБ"
+echo "==> модель распознавания ($MODEL_SIZE, $MODEL_NAME)"
+CURRENT_MODEL="$(cat "$DATA/model/.voice-player-model-name" 2>/dev/null || true)"
+if [ -d "$DATA/model" ] && [ "$CURRENT_MODEL" != "$MODEL_NAME" ]; then
+  echo "уже стоит другая модель ($CURRENT_MODEL) — чтобы сменить на $MODEL_NAME, удали $DATA/model и запусти install.sh заново"
+elif [ ! -d "$DATA/model" ]; then
   "$DATA/venv/bin/python" - "$DATA" "$MODEL_NAME" <<'EOF'
 import shutil, sys, tempfile, urllib.request, zipfile
 from pathlib import Path
@@ -63,8 +78,11 @@ with tempfile.TemporaryDirectory() as tmp:
     urllib.request.urlretrieve(f"https://alphacephei.com/vosk/models/{name}.zip", archive)
     zipfile.ZipFile(archive).extractall(tmp)
     shutil.move(str(Path(tmp) / name), data / "model")
+(data / "model" / ".voice-player-model-name").write_text(name)
 print("модель скачана")
 EOF
+else
+  echo "уже есть"
 fi
 
 echo "==> kdotool для переключения окон (~800 КБ)"
