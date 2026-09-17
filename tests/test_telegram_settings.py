@@ -33,6 +33,37 @@ def test_load_settings_missing_field_returns_none(tmp_path, caplog):
     assert "не заполнены поля" in caplog.text
 
 
+def test_load_settings_skip_titles_matching_defaults_to_empty(tmp_path):
+    path = tmp_path / "telegram.toml"
+    path.write_text(
+        """
+        api_id = 1
+        api_hash = "abc"
+        session_name = "voice-player"
+        mr_kitty_channel = "@kitty"
+        search_bot = "@musicbot"
+        """,
+        encoding="utf-8",
+    )
+    assert load_settings(path).skip_titles_matching == ""
+
+
+def test_load_settings_reads_skip_titles_matching(tmp_path):
+    path = tmp_path / "telegram.toml"
+    path.write_text(
+        """
+        api_id = 1
+        api_hash = "abc"
+        session_name = "voice-player"
+        mr_kitty_channel = "@kitty"
+        search_bot = "@musicbot"
+        skip_titles_matching = "remix|cover"
+        """,
+        encoding="utf-8",
+    )
+    assert load_settings(path).skip_titles_matching == "remix|cover"
+
+
 def test_load_settings_empty_string_counts_as_missing(tmp_path):
     path = tmp_path / "telegram.toml"
     path.write_text(

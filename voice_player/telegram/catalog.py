@@ -32,6 +32,11 @@ def slugify_title(title: str) -> str:
     return " ".join(_NON_WORD_RE.sub(" ", title.strip().lower()).split())
 
 
+def should_skip_title(title: str, pattern: str) -> bool:
+    """pattern пустой -> ничего не пропускаем; иначе регулярка без учёта регистра."""
+    return bool(pattern) and re.search(pattern, title, re.I) is not None
+
+
 def merge_tracks(existing: dict[str, str], new_entries: dict[str, str]) -> dict[str, str]:
     """Добавляет новые слова, никогда не трогает уже существующие (пользователь мог их поправить)."""
     merged = dict(existing)
@@ -53,11 +58,15 @@ def sync(settings: TelegramSettings) -> None:
     new_entries: dict[str, str] = {}
 
     app = make_client(settings)
+    skipped = 0
     with app:
         for message in app.get_chat_history(settings.mr_kitty_channel):
             if not message.audio:
                 continue
             title = message.audio.title or message.audio.file_name or f"track-{message.id}"
+            if should_skip_title(title, settings.skip_titles_matching):
+                skipped += 1
+                continue
             slug = _NON_WORD_RE.sub("_", title.lower()).strip("_")
             dest = TRACKS_DIR / f"{message.id}-{slug}.mp3"
             if dest.exists():
@@ -70,7 +79,10 @@ def sync(settings: TelegramSettings) -> None:
 
     merged = merge_tracks(existing, new_entries)
     write_tracks(TELEGRAM_TRACKS, merged)
-    logger.info("готово: %s треков в %s (%s новых)", len(merged), TELEGRAM_TRACKS, len(new_entries))
+    logger.info(
+        "готово: %s треков в %s (%s новых, %s пропущено фильтром)",
+        len(merged), TELEGRAM_TRACKS, len(new_entries), skipped,
+    )
 
 
 def _check_vocabulary() -> None:

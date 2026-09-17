@@ -13,6 +13,7 @@ dev = ["pytest", "ruff"]
 [project.scripts]
 voice-player = "voice_player.cli:main"
 voice-player-telegram-sync = "voice_player.telegram.catalog:main"
+voice-player-check-word = "voice_player.check_words:main"
 
 [build-system]
 requires = ["setuptools>=68"]

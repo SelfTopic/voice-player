@@ -19,6 +19,9 @@ class TelegramSettings:
     session_name: str
     mr_kitty_channel: str
     search_bot: str
+    # регулярка (без учёта регистра): треки с совпадением в названии voice-player-telegram-sync
+    # не скачивает — каверы, ремиксы и т.п., которые обычно не нужны в офлайн-каталоге
+    skip_titles_matching: str = ""
 
 
 def load_settings(path: Path = TELEGRAM_CONFIG) -> TelegramSettings | None:
@@ -30,4 +33,6 @@ def load_settings(path: Path = TELEGRAM_CONFIG) -> TelegramSettings | None:
     if missing:
         logger.warning("%s: не заполнены поля %s, телеграм-интеграция выключена", path.name, missing)
         return None
-    return TelegramSettings(**{key: data[key] for key in _REQUIRED_KEYS})
+    fields = {key: data[key] for key in _REQUIRED_KEYS}
+    fields["skip_titles_matching"] = data.get("skip_titles_matching", "")
+    return TelegramSettings(**fields)

@@ -87,8 +87,15 @@ systemctl --user enable --now voice-player
    Скачает все треки из `mr_kitty_channel` в `~/.local/share/voice-player/telegram/tracks/` и
    сгенерирует `~/.local/share/voice-player/telegram/tracks.txt` (`слово = путь` — тот же формат,
    что `windows.txt`). В конце выведет, сколько слов из сгенерированных модель Vosk реально
-   знает — остальные (чаще всего англоязычные названия) стоит поправить в `tracks.txt` руками,
-   вписав то, что ты реально сможешь произнести и что есть в словаре модели.
+   знает — обычно почти ноль: названия чаще всего английские, а модель — маленькая русская.
+   Слова в `tracks.txt` придётся поправить руками на то, что реально произносится и есть в
+   словаре модели. Проверять кандидатов быстро, не перезапуская voice-player и не перезагружая
+   модель на каждый вариант:
+   ```bash
+   ~/.local/share/voice-player/venv/bin/voice-player-check-word
+   # вводишь построчно: вейл / мистер китти вейл / ...
+   # ✓ — слово(а) знает модель, ✗ — нет (в предупреждении видно, какое именно слово подвело)
+   ```
 4. `systemctl --user restart voice-player`.
 
 Дальше два независимых способа:
@@ -140,3 +147,4 @@ ruff check voice_player
 | `telegram/client.py` | обёртка над Pyrogram-клиентом, поллинг-хелперы |
 | `telegram/search.py` | бот-поиск: сообщение → кнопка → скачанный файл |
 | `telegram/catalog.py` | `voice-player-telegram-sync`: скан канала Mr. Kitty → `tracks.txt` |
+| `check_words.py` | `voice-player-check-word`: быстрая проверка слов на словарь Vosk |

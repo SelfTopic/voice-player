@@ -1,4 +1,24 @@
-from voice_player.telegram.catalog import merge_tracks, slugify_title, write_tracks
+from voice_player.telegram.catalog import (
+    merge_tracks,
+    should_skip_title,
+    slugify_title,
+    write_tracks,
+)
+
+
+class TestShouldSkipTitle:
+    def test_no_pattern_skips_nothing(self):
+        assert should_skip_title("Pon De Floor (Mr.Kitty Remix)", "") is False
+
+    def test_matches_remix_case_insensitively(self):
+        assert should_skip_title("Pon De Floor (Mr.Kitty Remix)", "remix|cover") is True
+        assert should_skip_title("Video Games (Mr.Kitty REMIX)", "remix|cover") is True
+
+    def test_matches_cover(self):
+        assert should_skip_title("Electric Feel (Cover)", "remix|cover") is True
+
+    def test_original_track_not_matched(self):
+        assert should_skip_title("Perpetual", "remix|cover") is False
 
 
 class TestSlugifyTitle:
