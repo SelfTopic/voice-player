@@ -24,7 +24,15 @@ class FakeTelegram:
         return self.track
 
 
-def _make_asker(players: Players, telegram=None) -> Asker:
+class FakeLocalPlayer:
+    def __init__(self):
+        self.played: list[tuple] = []
+
+    def play(self, path, players, label, notify_on):
+        self.played.append((path, label, notify_on))
+
+
+def _make_asker(players: Players, telegram=None, local_player=None) -> Asker:
     asker = Asker.__new__(Asker)
     asker.players = players
     asker.kdotool = None
@@ -32,21 +40,17 @@ def _make_asker(players: Players, telegram=None) -> Asker:
     asker.dictation = None
     asker.notify_on = False
     asker.telegram = telegram
+    asker.local_player = local_player or FakeLocalPlayer()
     return asker
 
 
-def test_play_from_telegram_found(monkeypatch):
-    played = []
-    monkeypatch.setattr(
-        "voice_player.asker.play_local_file",
-        lambda path, players, label, notify_on: played.append((path, label)),
-    )
+def test_play_from_telegram_found():
     telegram = FakeTelegram(Path("/tmp/track.mp3"))
     asker = _make_asker(Players(), telegram=telegram)
 
     assert asker._play_from_telegram("bloodlust") is True
     assert telegram.queries == ["bloodlust"]
-    assert played == [(Path("/tmp/track.mp3"), "bloodlust")]
+    assert asker.local_player.played == [(Path("/tmp/track.mp3"), "bloodlust", False)]
 
 
 def test_play_from_telegram_not_found():

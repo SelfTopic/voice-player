@@ -4,9 +4,9 @@ import shutil
 import subprocess
 
 
-def run_quiet(cmd: list[str]) -> None:
+def run_quiet(cmd: list[str]) -> subprocess.Popen:
     # не ждём завершения, чтобы не задерживать чтение микрофона
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def notify(text: str) -> None:

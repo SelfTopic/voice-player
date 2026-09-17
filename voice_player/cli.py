@@ -38,6 +38,7 @@ from .config import (
 )
 from .dictation import Dictation
 from .grammar import build_grammar, known_words
+from .local_playback import LocalPlayer
 from .logging_setup import configure as configure_logging
 from .loop import VoiceLoop
 from .players import Players
@@ -167,6 +168,7 @@ def make_input_devices(kdotool: str | None) -> tuple[UInputDevice | None, UInput
 def make_asker(
     args: argparse.Namespace, players: Players, kdotool: str | None,
     keyboard: UInputDevice | None, dictation: Dictation, telegram: TelegramSearch | None,
+    local_player: LocalPlayer,
 ) -> Asker | None:
     if args.no_ask:
         return None
@@ -175,7 +177,10 @@ def make_asker(
     if names:
         logger.info("подсказки для Whisper: %s", ", ".join(names))
     try:
-        return Asker(args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify, telegram)
+        return Asker(
+            args.whisper, names, players, kdotool, keyboard, dictation, not args.no_notify,
+            telegram, local_player,
+        )
     except ImportError as e:
         logger.warning("запросы выключены: %s (запусти install.sh --ask)", e)
         return None
@@ -220,6 +225,7 @@ def main() -> None:
 
     players = Players()
     dictation = Dictation()
+    local_player = LocalPlayer()
     kdotool = find_kdotool()
 
     window_patterns = register_window_commands(args, kdotool)
@@ -227,7 +233,7 @@ def main() -> None:
     register_telegram_track_commands(args)
     keyboard, mouse = make_input_devices(kdotool)
     telegram = make_telegram(args)
-    asker = make_asker(args, players, kdotool, keyboard, dictation, telegram)
+    asker = make_asker(args, players, kdotool, keyboard, dictation, telegram, local_player)
 
     rec, free, phrases = build_recognizers(model, wake, asker, keyboard)
 
@@ -239,8 +245,9 @@ def main() -> None:
 
     loop = VoiceLoop(
         mic=mic, rec=rec, free=free, players=players, dictation=dictation, asker=asker,
-        kdotool=kdotool, keyboard=keyboard, mouse=mouse, window_patterns=window_patterns,
-        wake=wake, stable=args.stable, min_conf=args.min_conf, notify_on=not args.no_notify,
+        local_player=local_player, kdotool=kdotool, keyboard=keyboard, mouse=mouse,
+        window_patterns=window_patterns, wake=wake, stable=args.stable, min_conf=args.min_conf,
+        notify_on=not args.no_notify,
     )
     try:
         loop.run()

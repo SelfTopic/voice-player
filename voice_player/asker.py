@@ -8,7 +8,7 @@ from .clipboard import clipboard_get, clipboard_set
 from .config import BROWSER_PATTERN
 from .dictation import Dictation, type_text
 from .grammar import ASK, ASK_YOUTUBE, DICTATE, GOOGLE, PROMPTS, extract_query
-from .local_playback import play_local_file
+from .local_playback import LocalPlayer
 from .notify import notify, run_quiet
 from .players import Players, playerctl
 from .telegram.search import TelegramSearch
@@ -48,7 +48,7 @@ class Asker:
     def __init__(
         self, whisper_model: str, names: list[str], players: Players,
         kdotool: str | None, keyboard: "UInputDevice | None", dictation: Dictation, notify_on: bool,
-        telegram: TelegramSearch | None = None,
+        telegram: TelegramSearch | None = None, local_player: LocalPlayer | None = None,
     ):
         import numpy as np
         import yt_dlp
@@ -62,6 +62,7 @@ class Asker:
         self.dictation = dictation
         self.notify_on = notify_on
         self.telegram = telegram
+        self.local_player = local_player or LocalPlayer()
         self.prompt = build_prompt(names)
         self.whisper = WhisperModel(whisper_model, device="cpu", compute_type="int8")
 
@@ -133,7 +134,7 @@ class Asker:
         if not track:
             logger.debug("телеграм ничего не нашёл, пробую youtube")
             return False
-        play_local_file(track, self.players, query, notify_on=False)  # своё "▶" даст self.say ниже
+        self.local_player.play(track, self.players, query, notify_on=False)  # своё "▶" даст self.say ниже
         self.say(f"▶ {query}")
         return True
 

@@ -29,7 +29,7 @@ from .grammar import (
     command_at_end,
     parse_command,
 )
-from .local_playback import play_local_file
+from .local_playback import LocalPlayer
 from .notify import notify, run_quiet
 from .players import Players
 from .uinput import UInputDevice
@@ -44,9 +44,9 @@ class VoiceLoop:
 
     def __init__(
         self, *, mic, rec, free, players: Players, dictation: Dictation, asker: Asker | None,
-        kdotool: str | None, keyboard: UInputDevice | None, mouse: UInputDevice | None,
-        window_patterns: dict[str, str], wake: str | None, stable: int, min_conf: float,
-        notify_on: bool,
+        local_player: LocalPlayer, kdotool: str | None, keyboard: UInputDevice | None,
+        mouse: UInputDevice | None, window_patterns: dict[str, str], wake: str | None,
+        stable: int, min_conf: float, notify_on: bool,
     ):
         self.mic = mic
         self.rec = rec
@@ -54,6 +54,7 @@ class VoiceLoop:
         self.players = players
         self.dictation = dictation
         self.asker = asker
+        self.local_player = local_player
         self.kdotool = kdotool
         self.keyboard = keyboard
         self.mouse = mouse
@@ -189,7 +190,7 @@ class VoiceLoop:
             threading.Thread(target=self.mouse.scroll, args=(int(argv[1]),), daemon=True).start()
         elif argv[0] == PLAY_TRACK:
             threading.Thread(
-                target=play_local_file, args=(Path(argv[1]), self.players, cmd, self.notify_on), daemon=True,
+                target=self.local_player.play, args=(Path(argv[1]), self.players, cmd, self.notify_on), daemon=True,
             ).start()
         elif argv[0] == FULLSCREEN:
             threading.Thread(
