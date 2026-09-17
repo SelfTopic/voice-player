@@ -25,6 +25,8 @@ from .notify import notify, run_quiet
 from .players import Players
 
 VLC_PATTERN = "vlc"
+# Mr. Kitty качается как .mp3, но бот-поиск в Telegram присылает аудио в чём попало
+AUDIO_EXTENSIONS = ("*.mp3", "*.m4a", "*.ogg", "*.opus", "*.flac", "*.wav")
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +84,10 @@ class LocalPlayer:
             notify(path.stem)
 
     def _pool(self) -> list[Path]:
-        return [p for d in self.track_dirs if d.is_dir() for p in d.glob("*.mp3")]
+        return [
+            p for d in self.track_dirs if d.is_dir()
+            for pattern in AUDIO_EXTENSIONS for p in d.glob(pattern)
+        ]
 
     def _spawn(self, path: Path) -> None:
         """Вызывать только под self.lock."""

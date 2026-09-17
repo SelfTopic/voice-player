@@ -134,6 +134,16 @@ class TestNextPrevious:
         assert player.history[0] in {pool / "a.mp3", pool / "b.mp3"}
         assert player.position == 0
 
+    def test_pool_includes_non_mp3_audio_formats(self, monkeypatch, tmp_path):
+        # бот-поиск в Telegram присылает аудио в чём попало (m4a, ogg, ...), не только mp3
+        pool = _make_pool(tmp_path, ["a.m4a"])
+        _patch_run_quiet(monkeypatch)
+        player, players = LocalPlayer([pool]), Players()
+
+        player.next(players, notify_on=False)
+
+        assert player.history == [pool / "a.m4a"]
+
     def test_next_avoids_repeating_current_track_when_pool_has_alternatives(self, monkeypatch, tmp_path):
         pool = _make_pool(tmp_path, ["a.mp3", "b.mp3"])
         _patch_run_quiet(monkeypatch)
