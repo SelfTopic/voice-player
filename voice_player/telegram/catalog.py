@@ -10,14 +10,17 @@ import sys
 from pathlib import Path
 
 from ..commands import load_mapping
-from ..config import DEFAULT_MODEL, TELEGRAM_CONFIG, TELEGRAM_DATA_DIR, TELEGRAM_TRACKS
+from ..config import (
+    DEFAULT_MODEL,
+    TELEGRAM_CONFIG,
+    TELEGRAM_TRACKS,
+    TELEGRAM_TRACKS_DIR,
+)
 from ..logging_setup import configure as configure_logging
 from .client import make_client
 from .settings import TelegramSettings, load_settings
 
 logger = logging.getLogger(__name__)
-
-TRACKS_DIR = TELEGRAM_DATA_DIR / "tracks"
 
 _NON_WORD_RE = re.compile(r"[^a-zа-яё0-9]+", re.I)
 
@@ -53,7 +56,7 @@ def write_tracks(path: Path, tracks: dict[str, str]) -> None:
 
 
 def sync(settings: TelegramSettings) -> None:
-    TRACKS_DIR.mkdir(parents=True, exist_ok=True)
+    TELEGRAM_TRACKS_DIR.mkdir(parents=True, exist_ok=True)
     existing = load_mapping(TELEGRAM_TRACKS, {})
     new_entries: dict[str, str] = {}
 
@@ -68,7 +71,7 @@ def sync(settings: TelegramSettings) -> None:
                 skipped += 1
                 continue
             slug = _NON_WORD_RE.sub("_", title.lower()).strip("_")
-            dest = TRACKS_DIR / f"{message.id}-{slug}.mp3"
+            dest = TELEGRAM_TRACKS_DIR / f"{message.id}-{slug}.mp3"
             if dest.exists():
                 continue
             logger.info("скачиваю: %s", title)

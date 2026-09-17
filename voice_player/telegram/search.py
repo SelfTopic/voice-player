@@ -9,16 +9,14 @@ import logging
 from pathlib import Path
 
 from ..config import (
-    TELEGRAM_DATA_DIR,
     TELEGRAM_DOWNLOAD_TIMEOUT_SEC,
+    TELEGRAM_SAVED_DIR,
     TELEGRAM_SEARCH_TIMEOUT_SEC,
 )
 from .client import make_client, poll_until
 from .settings import TelegramSettings
 
 logger = logging.getLogger(__name__)
-
-CACHE_DIR = TELEGRAM_DATA_DIR / "cache"
 
 
 class TelegramSearch:
@@ -39,8 +37,9 @@ class TelegramSearch:
             if audio is None:
                 logger.debug("телеграм-бот не прислал аудио на «%s»", query)
                 return None
-            CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            return Path(self.app.download_media(audio, file_name=f"{CACHE_DIR}/"))
+            # остаётся насовсем (не кэш!) -- часть общего пула для "дальше" (LocalPlayer)
+            TELEGRAM_SAVED_DIR.mkdir(parents=True, exist_ok=True)
+            return Path(self.app.download_media(audio, file_name=f"{TELEGRAM_SAVED_DIR}/"))
         except Exception:
             logger.debug("ошибка телеграм-поиска «%s»", query, exc_info=True)
             return None

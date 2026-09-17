@@ -33,7 +33,9 @@ from .config import (
     SAMPLE_RATE,
     SEARCH_WORDS,
     SINK_WORD,
+    TELEGRAM_SAVED_DIR,
     TELEGRAM_TRACKS,
+    TELEGRAM_TRACKS_DIR,
     YOUTUBE_TRIGGER_WORDS,
 )
 from .dictation import Dictation
@@ -225,7 +227,7 @@ def main() -> None:
 
     players = Players()
     dictation = Dictation()
-    local_player = LocalPlayer()
+    local_player = LocalPlayer(track_dirs=[TELEGRAM_TRACKS_DIR, TELEGRAM_SAVED_DIR])
     kdotool = find_kdotool()
 
     window_patterns = register_window_commands(args, kdotool)

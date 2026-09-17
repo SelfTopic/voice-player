@@ -29,7 +29,7 @@ from .grammar import (
     command_at_end,
     parse_command,
 )
-from .local_playback import LocalPlayer
+from .local_playback import VLC_PATTERN, LocalPlayer
 from .notify import notify, run_quiet
 from .players import Players
 from .uinput import UInputDevice
@@ -173,13 +173,25 @@ class VoiceLoop:
         self.free.Reset()
         self.candidate, self.streak = None, 0
 
+    def _dispatch_player_action(self, action: list[str], label: str) -> None:
+        """«дальше»/«назад» для VLC (LocalPlayer) — у него плейлист из одного файла, родных
+        Next/Previous там нечем листать, поэтому эти два случая обрабатывает сам LocalPlayer
+        (случайный трек из пула / шаг назад по истории). Остальное — как раньше, через playerctl."""
+        if action[0] in ("next", "previous"):
+            targets, _ = self.players.targets(action[0])
+            if any(VLC_PATTERN in t for t in targets):
+                method = self.local_player.next if action[0] == "next" else self.local_player.previous
+                method(self.players, self.notify_on)
+                return
+        self.players.run(action, label, self.notify_on)
+
     def _fire(self, cmd: str, now: float, how: str) -> None:
         logger.info("→ %s", cmd)
         logger.debug("сработало по: %s", how)
         argv = COMMANDS[cmd]
         if argv[0] == PLAYER:
             # в потоке: опрос плееров занимает десятки миллисекунд, микрофон ждать не должен
-            threading.Thread(target=self.players.run, args=(argv[1:], cmd, self.notify_on), daemon=True).start()
+            threading.Thread(target=self._dispatch_player_action, args=(argv[1:], cmd), daemon=True).start()
         elif argv[0] == SEND:
             threading.Thread(
                 target=send_enter, args=(self.kdotool, self.keyboard, self.dictation, self.notify_on), daemon=True,
