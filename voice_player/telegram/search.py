@@ -20,6 +20,7 @@ from ..config import (
     TELEGRAM_SEARCH_TIMEOUT_SEC,
 )
 from .client import TelegramWorker, poll_until
+from .query_cache import find_similar, remember_query
 from .settings import TelegramSettings
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,21 @@ class TelegramSearch:
         self.worker = TelegramWorker(settings)
 
     def find_track(self, query: str) -> Path | None:
+        # сначала — что уже когда-то нашлось по похожему запросу (Whisper слышит одну и ту же
+        # фразу чуть по-разному от раза к разу; без этого разные "услышанные" варианты одной
+        # просьбы каждый раз заново идут к боту и могут вернуть другой результат)
+        cached = find_similar(query)
+        if cached:
+            logger.info("похожий запрос уже был: %s", Path(cached).name)
+            return Path(cached)
         try:
-            return self.worker.run(self._find_track(query), timeout=_OVERALL_TIMEOUT_SEC)
+            result = self.worker.run(self._find_track(query), timeout=_OVERALL_TIMEOUT_SEC)
         except Exception:
             logger.debug("ошибка телеграм-поиска «%s»", query, exc_info=True)
             return None
+        if result:
+            remember_query(query, str(result))
+        return result
 
     async def _find_track(self, query: str) -> Path | None:
         app = self.worker.app
