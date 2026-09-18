@@ -19,6 +19,7 @@ from .commands import (
     SCROLL,
     SEND,
     SINK,
+    SLOW_ONLY,
     load_mapping,
     read_lines,
 )
@@ -36,6 +37,7 @@ from .config import (
     TELEGRAM_SAVED_DIR,
     TELEGRAM_TRACKS,
     TELEGRAM_TRACKS_DIR,
+    TRACK_WORD,
     YOUTUBE_TRIGGER_WORDS,
 )
 from .dictation import Dictation
@@ -44,6 +46,7 @@ from .local_playback import LocalPlayer
 from .logging_setup import configure as configure_logging
 from .loop import VoiceLoop
 from .players import Players
+from .telegram.numerals import is_number_phrase
 from .telegram.search import TelegramSearch
 from .telegram.settings import load_settings as load_telegram_settings
 from .uinput import (
@@ -71,7 +74,6 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--model", type=Path, default=DEFAULT_MODEL, help="папка с моделью Vosk")
     ap.add_argument("--wake", help="ключевое слово перед быстрыми командами, например «джарвис»")
     ap.add_argument("--device", help="источник звука (pactl list short sources)")
-    ap.add_argument("--min-conf", type=float, default=0.7, help="порог уверенности 0..1 (для медленного режима)")
     ap.add_argument(
         "--stable", type=int, default=3,
         help="быстрый режим: сколько кусков по 50 мс слово должно продержаться; 0 = ждать конца фразы",
@@ -130,12 +132,19 @@ def register_sink_commands(args: argparse.Namespace) -> None:
 
 def register_telegram_track_commands(args: argparse.Namespace) -> None:
     """Слова из офлайн-каталога Mr. Kitty (voice-player-telegram-sync) — как windows.txt,
-    но без Whisper: сразу быстрая команда «включить локальный файл»."""
+    но без Whisper: сразу быстрая команда «включить локальный файл». Всегда с префиксом
+    TRACK_WORD («песня вейл») — простые слова из tracks.txt слишком похожи на обычную речь.
+    Числительные («песня сто сорок») дополнительно уходят в SLOW_ONLY: «сто» — законченная
+    команда сама по себе и префикс «сто сорок», без этого быстрый путь стрелял бы по ней раньше
+    времени (см. SLOW_ONLY в commands.py)."""
     for word, path in load_mapping(args.tracks, {}).items():
-        if word in COMMANDS:
-            logger.warning("«%s» уже занято другой командой, трек пропущен", word)
+        phrase = f"{TRACK_WORD} {word}"
+        if phrase in COMMANDS:
+            logger.warning("«%s» уже занято другой командой, трек пропущен", phrase)
             continue
-        COMMANDS[word] = [PLAY_TRACK, path]
+        COMMANDS[phrase] = [PLAY_TRACK, path]
+        if is_number_phrase(word):
+            SLOW_ONLY.add(phrase)
 
 
 def make_telegram(args: argparse.Namespace) -> TelegramSearch | None:
@@ -208,10 +217,18 @@ def print_startup_summary(
     wake: str | None, phrases: list[str], window_patterns: dict[str, str], asker: Asker | None, keyboard,
 ) -> None:
     hint = f"«{wake} <команда>»" if wake else "команды"
-    logger.info("слушаю %s: %s", hint, ", ".join(p for p in phrases if p not in window_patterns))
+    track_prefix = f"{TRACK_WORD} "
+    track_phrases = [p for p in phrases if p.startswith(track_prefix)]
+    other_phrases = [p for p in phrases if p not in window_patterns and p not in track_phrases]
+    logger.info("слушаю %s: %s", hint, ", ".join(other_phrases))
     active_windows = [p for p in phrases if p in window_patterns]
     if active_windows:
         logger.info("окна: %s", ", ".join(active_windows))
+    if track_phrases:
+        logger.info(
+            "локальные треки (%s штук): «%s <слово>», например «%s»",
+            len(track_phrases), TRACK_WORD, track_phrases[0],
+        )
     if asker:
         extra = ", «напиши <текст>» и «отправь»" if keyboard else ""
         logger.info(
@@ -248,7 +265,7 @@ def main() -> None:
     loop = VoiceLoop(
         mic=mic, rec=rec, free=free, players=players, dictation=dictation, asker=asker,
         local_player=local_player, kdotool=kdotool, keyboard=keyboard, mouse=mouse,
-        window_patterns=window_patterns, wake=wake, stable=args.stable, min_conf=args.min_conf,
+        window_patterns=window_patterns, wake=wake, stable=args.stable,
         notify_on=not args.no_notify,
     )
     try:

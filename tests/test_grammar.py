@@ -33,6 +33,28 @@ class TestCommandAtEnd:
     def test_single_word_command_at_end_of_partial(self):
         assert command_at_end("э я хочу сказать пауза", None, False) == "пауза"
 
+    def test_slow_only_phrase_is_not_matched_by_partial_recognition(self):
+        # «сто» — законченная команда САМА ПО СЕБЕ и одновременно префикс «сто сорок»:
+        # без SLOW_ONLY быстрый путь стрелял бы по ней раньше, чем модель договорит остальное
+        from voice_player.commands import COMMANDS, SLOW_ONLY
+
+        COMMANDS["сто"] = ["__test__"]
+        SLOW_ONLY.add("сто")
+        try:
+            assert command_at_end("трек сто", None, False) is None
+        finally:
+            del COMMANDS["сто"]
+            SLOW_ONLY.discard("сто")
+
+    def test_non_slow_only_phrase_matches_normally(self):
+        from voice_player.commands import COMMANDS
+
+        COMMANDS["тестовое слово"] = ["__test__"]
+        try:
+            assert command_at_end("тестовое слово", None, False) == "тестовое слово"
+        finally:
+            del COMMANDS["тестовое слово"]
+
     def test_two_word_command_preferred_over_one_word_tail(self):
         # «экран» само по себе не команда, а «полный экран» — команда
         assert command_at_end("сделай полный экран", None, False) == "полный экран"

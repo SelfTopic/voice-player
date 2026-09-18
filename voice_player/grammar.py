@@ -3,7 +3,7 @@
 import logging
 import re
 
-from .commands import COMMANDS
+from .commands import COMMANDS, SLOW_ONLY
 from .config import (
     ASK_VERBS,
     ASK_VERBS_FAST,
@@ -96,7 +96,7 @@ def command_at_end(text: str, wake: str | None, ask: bool) -> str | None:
         if len(words) < size:
             continue
         phrase = " ".join(words[-size:])
-        if phrase not in COMMANDS:
+        if phrase not in COMMANDS or phrase in SLOW_ONLY:
             continue
         before = words[:-size]
         if wake and (not before or before[-1] != wake):

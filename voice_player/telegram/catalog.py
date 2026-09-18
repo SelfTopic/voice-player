@@ -18,6 +18,7 @@ from ..config import (
 )
 from ..logging_setup import configure as configure_logging
 from .client import make_client
+from .numerals import number_to_words
 from .settings import TelegramSettings, load_settings
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,13 @@ def sync(settings: TelegramSettings) -> None:
                 continue
             logger.info("скачиваю: %s", title)
             app.download_media(message, file_name=str(dest))
+            # гарантированное слово — по номеру: перевод/транскрипция названия (добавляются
+            # руками через voice-player-check-word) может не пройти словарь модели, номер знает
+            # наверняка (все числительные до 999 проверены на существующей модели)
+            if 0 <= message.id < 1000:
+                new_entries[number_to_words(message.id)] = str(dest)
+            else:
+                logger.warning("id %s вне диапазона 0..999 — без гарантированного номера", message.id)
             word = slugify_title(title)
             if word:
                 new_entries[word] = str(dest)

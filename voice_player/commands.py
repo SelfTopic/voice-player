@@ -20,6 +20,11 @@ PLAY_TRACK = "__play_track__"  # локальный файл из телегра
 COMMANDS: dict[str, list[str]] = {
     "пауза": [PLAYER, "pause"],
     "стоп": [PLAYER, "pause"],
+    "хватит": [PLAYER, "pause"],
+    "тихо": [PLAYER, "pause"],
+    "молчать": [PLAYER, "pause"],
+    "заткнись": [PLAYER, "pause"],
+    "завались": [PLAYER, "pause"],
     "играй": [PLAYER, "play"],
     "плей": [PLAYER, "play"],
     "продолжи": [PLAYER, "play"],
@@ -44,6 +49,12 @@ COMMANDS: dict[str, list[str]] = {
     "выше": [SCROLL, str(SCROLL_NOTCHES)],
     "отправь": [SEND],
 }
+
+# слова из COMMANDS, которые нельзя ловить по частичному (быстрому) распознаванию — только по
+# завершённой фразе целиком. Нужно для составных числительных («сто сорок»): «сто» само по себе
+# законченная команда (трек №100) и одновременно префикс «сто сорок» — без этого быстрый путь
+# стрелял бы по «сто», не дожидаясь «сорок» (см. register_telegram_track_commands в cli.py).
+SLOW_ONLY: set[str] = set()
 
 
 def read_lines(path: Path) -> list[str]:

@@ -46,7 +46,7 @@ class VoiceLoop:
         self, *, mic, rec, free, players: Players, dictation: Dictation, asker: Asker | None,
         local_player: LocalPlayer, kdotool: str | None, keyboard: UInputDevice | None,
         mouse: UInputDevice | None, window_patterns: dict[str, str], wake: str | None,
-        stable: int, min_conf: float, notify_on: bool,
+        stable: int, notify_on: bool,
     ):
         self.mic = mic
         self.rec = rec
@@ -61,7 +61,6 @@ class VoiceLoop:
         self.window_patterns = window_patterns
         self.wake = wake
         self.stable = stable
-        self.min_conf = min_conf
         self.notify_on = notify_on
 
         self.chunk_bytes = SAMPLE_RATE * 2 * CHUNK_MS // 1000
@@ -138,14 +137,17 @@ class VoiceLoop:
         text = res.get("text", "")
         if not text:
             return
-        conf = min((w.get("conf", 0.0) for w in res.get("result", [])), default=0.0)
-        logger.debug("слышу: «%s» (conf %.2f)", text, conf)
+        if logger.isEnabledFor(logging.DEBUG):
+            conf = min((w.get("conf", 0.0) for w in res.get("result", [])), default=0.0)
+            logger.debug("слышу: «%s» (conf %.2f)", text, conf)
         mode = ask_mode(text) if self.asker else None
         if mode:
             self._start_ask(mode)
             return
+        # уверенность (conf) не проверяем: грамматика и так ограничена известным списком слов —
+        # низкая conf на коротких командах («стоп») чаще означает тихую речь, а не ошибку распознавания
         cmd = parse_command(text, self.wake)
-        if cmd and conf >= self.min_conf:
+        if cmd:
             self._fire(cmd, now, "конец фразы")
 
     def _on_partial(self, now: float) -> None:
